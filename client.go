@@ -11,20 +11,40 @@ import (
 
 type Client struct {
 	conn        net.Conn
-	readBufSize int64
 	aes         Encoder
 	compression Encoder
-	OnMessage   func(msg *Message)
-	OnError     func(err error)
+	Option      *ClientOption
+	OnMessage   chan *Message
+	OnError     chan error
+}
+
+type ClientOption struct {
+	ReadBufSize int64
+}
+
+func newClient(conn net.Conn, opt *ClientOption) *Client {
+	if opt == nil {
+		opt = &ClientOption{}
+	}
+	if opt.ReadBufSize == 0 {
+		opt.ReadBufSize = 2048
+	}
+
+	return &Client{
+		conn:      conn,
+		OnMessage: make(chan *Message, 16),
+		OnError:   make(chan error, 16),
+		Option:    opt,
+	}
 }
 
 func (this *Client) HandleMessage() {
 	var buf = bytes.NewBufferString("")
 	for {
-		pack := make([]byte, this.readBufSize)
+		pack := make([]byte, this.Option.ReadBufSize)
 		_, err := this.conn.Read(pack)
 		if err != nil {
-			this.OnError(ERR_ReadMessage.Wrap(err.Error()))
+			this.OnError <- ERR_ReadMessage.Wrap(err.Error())
 			return
 		}
 
@@ -36,7 +56,7 @@ func (this *Client) HandleMessage() {
 			var p = make([]byte, rl)
 			_, err = buf.Read(p)
 			if err != nil {
-				this.OnError(ERR_ReadMessage.Wrap(err.Error()))
+				this.OnError <- ERR_ReadMessage.Wrap(err.Error())
 				return
 			}
 
@@ -46,10 +66,10 @@ func (this *Client) HandleMessage() {
 			} else {
 				msg, err := this.decodeMessage(p)
 				if err != nil {
-					this.OnError(ERR_DecodeMessage.Wrap(err.Error()))
+					this.OnError <- ERR_DecodeMessage.Wrap(err.Error())
 					return
 				}
-				this.OnMessage(msg)
+				this.OnMessage <- msg
 
 				rl = 4
 				rlb = true
