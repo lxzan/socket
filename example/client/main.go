@@ -13,10 +13,13 @@ func main() {
 		return
 	}
 
-	p := `C:\Users\Caster\Pictures\批注 2020-03-26 234104.png`
+	p := `C:\Users\Caster\Pictures\9c041d42bb028db839b5a67031887cdb.jpg`
 	f, _ := ioutil.ReadFile(p)
 	//client.WriteMessage(socket.BinaryMessage, nil, []byte("hello"))
-	client.WriteMessage(socket.BinaryMessage, nil, f)
+	_, err = client.WriteMessage(socket.BinaryMessage, nil, f)
+	if err != nil {
+		println(err.Error())
+	}
 
 	for {
 		select {

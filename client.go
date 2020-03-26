@@ -44,14 +44,13 @@ func (this *Client) handleMessage() {
 	var rlb = true
 	for {
 		pack := make([]byte, this.Option.ReadBufSize)
-		_, err := this.conn.Read(pack)
+		pl, err := this.conn.Read(pack)
 		if err != nil {
 			this.OnError <- ERR_ReadMessage.Wrap(err.Error())
 			return
 		}
-
-		pl := packLength(pack)
 		buf.Write(pack[:pl])
+
 		for uint32(buf.Len()) >= rl {
 			var p = make([]byte, rl)
 			_, err = buf.Read(p)
