@@ -6,21 +6,23 @@ import (
 	"errors"
 	json "github.com/json-iterator/go"
 	"net"
+	"strconv"
 )
 
 type Client struct {
-	net.Conn
+	conn        net.Conn
 	readBufSize int64
-	aes         *AesCrypto
+	aes         Encoder
+	compression Encoder
 	OnMessage   func(msg *Message)
 	OnError     func(err error)
 }
 
-func (this *Client) handleMessage() {
+func (this *Client) HandleMessage() {
 	var buf = bytes.NewBufferString("")
 	for {
 		pack := make([]byte, this.readBufSize)
-		_, err := this.Read(pack)
+		_, err := this.conn.Read(pack)
 		if err != nil {
 			this.OnError(ERR_ReadMessage.Wrap(err.Error()))
 			return
@@ -57,12 +59,10 @@ func (this *Client) handleMessage() {
 }
 
 func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
-	msg = &Message{}
-	//var compressionAlgo = CompressionAlgo_Gzip
+	msg = &Message{
+		Header: Form{},
+	}
 	var totalLength = len(data)
-	//if totalLength < 5*1024 {
-	//	compressionAlgo = CompressionAlgo_Gzip
-	//}
 
 	if totalLength < 4 {
 		return nil, errors.New("receive invalid data")
@@ -73,8 +73,6 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 
 	var b1 = data[2:4]
 	var headerLength = binary.LittleEndian.Uint16(b1)
-	//var rawHeader = data[4 : 4+headerLength]
-	//var rawBody = data[4+headerLength:]
 
 	var b2 []byte
 	if compressionAlgo == CompressionAlgo_Gzip {
@@ -83,13 +81,49 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 			return nil, err
 		}
 		b2 = tmp
+	} else {
+		b2 = data[4:]
 	}
 
-	if err := json.Unmarshal(b2[4:4+headerLength], &msg.Header); err != nil {
+	var b3 []byte
+	if cryptoAlgo == CryptoAlgo_RsaAes {
+		tmp, err := this.aes.Decode(b2)
+		if err != nil {
+			return nil, err
+		}
+		b3 = tmp
+	} else {
+		b3 = data[4:]
+	}
+
+	if err := json.Unmarshal(b3[:headerLength], &msg.Header); err != nil {
 		return nil, err
 	}
 
-	msg.Body = b2[4+headerLength:]
+	msg.Body = b3[headerLength:]
 
 	return msg, nil
+}
+
+func (this *Client) WriteMessage(typ MessageType, header Form, data []byte) (n int, err error) {
+	if header == nil {
+		header = Form{}
+	}
+	header["MessageType"] = strconv.Itoa(int(typ))
+
+	var b0 = make([]byte, 4)
+	var b1 = byte(0)
+	var b2 = byte(0)
+	var b3 = make([]byte, 2)
+	var b4, _ = json.Marshal(header)
+	var headerLength = len(b4)
+	binary.LittleEndian.PutUint16(b3, uint16(headerLength))
+	binary.LittleEndian.PutUint32(b0, uint32(4+len(b4)+len(data)))
+
+	var buf = bytes.NewBuffer(b0)
+	buf.Write([]byte{b1, b2})
+	buf.Write(b3)
+	buf.Write(b4)
+	buf.Write(data)
+	return this.conn.Write(buf.Bytes())
 }

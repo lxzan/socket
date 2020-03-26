@@ -1,27 +1,27 @@
 package main
 
 import (
-	"encoding/binary"
-	"fmt"
-	"net"
-	"tcp-demo/helper"
+	"github.com/lxzan/socket"
+	"time"
 )
 
 func main() {
-	conn, err := net.Dial("tcp", ":8080")
-	helper.CatchFatal(err)
-
-	for {
-		var content string
-		fmt.Scanf("%s", &content)
-		Send(conn, []byte(content))
+	client, err := socket.Dial("127.0.0.1:9090")
+	if err != nil {
+		println(err.Error())
+		return
 	}
-}
 
-func Send(conn net.Conn, data []byte) error {
-	var tmp = make([]byte, 4)
-	binary.LittleEndian.PutUint32(tmp, uint32(len(data)))
-	tmp = append(tmp, data...)
-	_, err := conn.Write(tmp)
-	return err
+	client.OnMessage = func(msg *socket.Message) {
+
+	}
+
+	client.OnError = func(err error) {
+
+	}
+
+	go client.HandleMessage()
+
+	client.WriteMessage(socket.TextMessage, nil, []byte("Hello"))
+	time.Sleep(3 * time.Second)
 }

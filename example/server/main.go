@@ -1,81 +1,23 @@
 package main
 
-import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"net"
-)
-
+import "github.com/lxzan/socket"
 
 func main() {
-	listener, err := net.Listen("tcp", ":8080")
-	CatchFatal(err)
+	s := socket.NewServer()
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			println(fmt.Sprintf("close: %s", err.Error()))
-		} else {
-			err = handleClient(conn)
-			if err != nil {
-				println(fmt.Sprintf("close: %s", err.Error()))
-			}
+	s.OnConnect = func(client *socket.Client) {
+		client.OnMessage = func(msg *socket.Message) {
+			println(string(msg.Body))
 		}
-	}
-}
 
-func CatchFatal(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func handleClient(conn net.Conn) error {
-	defer conn.Close()
-
-	var buf = bytes.NewBufferString("")
-	for {
-		pack := make([]byte, 1024)
-		_, err := conn.Read(pack)
-		if err != nil {
-			return err
+		client.OnError = func(err error) {
+			println(err.Error())
 		}
-		pl := PackLength(pack)
-		buf.Write(pack[:pl])
 
-		var rl uint32 = 4
-		var rlb = true
-		for uint32(buf.Len()) >= rl {
-			var p = make([]byte, rl)
-			_, err = buf.Read(p)
-			if err != nil {
-				return err
-			}
-
-			if rlb {
-				rl = binary.LittleEndian.Uint32(p)
-				rlb = false
-			} else {
-				Read(p)
-				rl = 4
-				rlb = true
-			}
-		}
+		client.HandleMessage()
 	}
-}
 
-func PackLength(msg []byte) int {
-	var i int
-	n := len(msg)
-	for i = n - 1; i >= 0; i-- {
-		if msg[i] != 0 {
-			break
-		}
+	if err := s.Run(":9090"); err != nil {
+		println(err.Error())
 	}
-	return i + 1
-}
-
-func Read(msg []byte) {
-	println("rec: " + string(msg))
 }
