@@ -38,8 +38,10 @@ func newClient(conn net.Conn, opt *ClientOption) *Client {
 	}
 }
 
-func (this *Client) HandleMessage() {
+func (this *Client) handleMessage() {
 	var buf = bytes.NewBufferString("")
+	var rl uint32 = 4
+	var rlb = true
 	for {
 		pack := make([]byte, this.Option.ReadBufSize)
 		_, err := this.conn.Read(pack)
@@ -50,8 +52,6 @@ func (this *Client) HandleMessage() {
 
 		pl := packLength(pack)
 		buf.Write(pack[:pl])
-		var rl uint32 = 4
-		var rlb = true
 		for uint32(buf.Len()) >= rl {
 			var p = make([]byte, rl)
 			_, err = buf.Read(p)

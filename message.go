@@ -44,21 +44,22 @@ func (this *Header) Get(k string) string {
 	return this.form[k]
 }
 
-func decodeHeader(d []byte)(*Header,error)  {
-	var header = &Header{form:Form{}}
-	if err:=jsoniter.Unmarshal(d,&header.form);err!=nil{
-		return nil,err
+func decodeHeader(d []byte) (*Header, error) {
+	var header = &Header{form: Form{}}
+	if err := jsoniter.Unmarshal(d, &header.form); err != nil {
+		return nil, err
 	}
 
-	if num,err:=strconv.Atoi(header.form["CompressionAlgo"]);err!=nil{
-		return nil,err
-	}else{
-		header.CompressionAlgo=CompressionAlgo(num)
+	if num, err := strconv.Atoi(header.form["CompressionAlgo"]); err != nil {
+		return nil, err
+	} else {
+		header.CompressionAlgo = CompressionAlgo(num)
 	}
 
-	if num,err:=strconv.Atoi(header.form["CompressionAlgo"]);err!=nil{
-		return nil,err
-	}else{
-		header.CompressionAlgo=CompressionAlgo(num)
+	if num, err := strconv.Atoi(header.form["CryptoAlgo"]); err != nil {
+		return nil, err
+	} else {
+		header.CryptoAlgo = CryptoAlgo(num)
 	}
+	return header, nil
 }

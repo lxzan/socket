@@ -1,20 +1,24 @@
 package main
 
-import "github.com/lxzan/socket"
+import (
+	"github.com/lxzan/socket"
+	"io/ioutil"
+)
 
 func main() {
 	s := socket.NewServer()
 
 	s.OnConnect = func(client *socket.Client) {
-		client.OnMessage = func(msg *socket.Message) {
-			println(string(msg.Body))
+		for {
+			select {
+			case msg := <-client.OnMessage:
+				err := ioutil.WriteFile(`C:\Users\Caster\Desktop\WorkPlace\socket\runtime\test.png`, msg.Body, 0755)
+				println(&err)
+			case err := <-client.OnError:
+				println(err.Error())
+				return
+			}
 		}
-
-		client.OnError = func(err error) {
-			println(err.Error())
-		}
-
-		client.HandleMessage()
 	}
 
 	if err := s.Run(":9090"); err != nil {

@@ -36,10 +36,8 @@ func (this *Server) Run(addr string) error {
 			continue
 		}
 
-		client := &Client{
-			conn:        conn,
-			readBufSize: this.ReadBufSize,
-		}
-		this.OnConnect(client)
+		client := newClient(conn, nil)
+		go this.OnConnect(client)
+		client.handleMessage()
 	}
 }

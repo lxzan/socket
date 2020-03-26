@@ -8,9 +8,7 @@ func Dial(addr string) (*Client, error) {
 		return nil, err
 	}
 
-	client := &Client{
-		conn:        conn,
-		readBufSize: 2048,
-	}
+	client := newClient(conn, nil)
+	go client.handleMessage()
 	return client, nil
 }

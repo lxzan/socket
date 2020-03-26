@@ -2,26 +2,28 @@ package main
 
 import (
 	"github.com/lxzan/socket"
-	"time"
+	"io/ioutil"
 )
 
 func main() {
+	println("start...")
 	client, err := socket.Dial("127.0.0.1:9090")
 	if err != nil {
 		println(err.Error())
 		return
 	}
 
-	client.OnMessage = func(msg *socket.Message) {
+	p := `C:\Users\Caster\Pictures\批注 2020-03-26 234104.png`
+	f, _ := ioutil.ReadFile(p)
+	//client.WriteMessage(socket.BinaryMessage, nil, []byte("hello"))
+	client.WriteMessage(socket.BinaryMessage, nil, f)
 
+	for {
+		select {
+		case msg := <-client.OnMessage:
+			println(string(msg.Body))
+		case err := <-client.OnError:
+			println(err.Error())
+		}
 	}
-
-	client.OnError = func(err error) {
-
-	}
-
-	go client.HandleMessage()
-
-	client.WriteMessage(socket.TextMessage, nil, []byte("Hello"))
-	time.Sleep(3 * time.Second)
 }
