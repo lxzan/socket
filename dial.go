@@ -8,11 +8,16 @@ func Dial(addr string, opt *DialOption) (*Client, error) {
 		return nil, err
 	}
 
-	client, err := newServerSideClient(conn, opt)
+	client, err := newClientSideClient(conn, opt)
 	if err != nil {
 		return nil, err
 	}
 
 	go client.handleMessage()
+
+	if err := client.sendHandshake(); err != nil {
+		return nil, err
+	}
+
 	return client, nil
 }

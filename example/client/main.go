@@ -6,16 +6,20 @@ import (
 
 func main() {
 	println("start...")
-	client, err := socket.Dial("127.0.0.1:9090", nil)
+	client, err := socket.Dial("127.0.0.1:9090", &socket.DialOption{
+		CryptoAlgo: socket.CryptoAlgo_RsaAes,
+		PublicKey:  "example/cert/pub.pem",
+	})
 	if err != nil {
 		println(err.Error())
 		return
 	}
 
-	//p := "/Users/Caster/Downloads/UYN`L`WOG$HXB7YA@C(}48F.jpg"
+	//p := "/Users/Caster/Downloads/E7D96742A2D38033BFBE46FFF33A92B1.jpg"
 	//f, _ := ioutil.ReadFile(p)
-	client.WriteMessage(socket.BinaryMessage, nil, []byte("hello world!"))
 	//_, err = client.WriteMessage(socket.BinaryMessage, nil, f)
+
+	client.WriteMessage(socket.TextMessage, nil, []byte("hello world!"))
 	if err != nil {
 		println(err.Error())
 	}

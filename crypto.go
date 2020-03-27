@@ -15,16 +15,16 @@ type AesCrypto struct {
 	key []byte
 }
 
-func NewAES(key []byte) *AesCrypto {
-	return &AesCrypto{key: key,}
+func NewAES(key []byte) (*AesCrypto, error) {
+	var n = len(key)
+	if n != 16 && n != 24 && n != 32 {
+		return nil, errors.New("ErrKeyLength")
+	}
+	return &AesCrypto{key: key}, nil
 }
 
 // ecb
 func (this *AesCrypto) Encode(plainText []byte) (cryptText []byte, err error) {
-	if len(this.key) != 16 && len(this.key) != 24 && len(this.key) != 32 {
-		return nil, errors.New("ErrKeyLengthSixteen")
-	}
-
 	block, _ := aes.NewCipher(this.key)
 	plainText = this.PKCS5Padding(plainText, block.BlockSize())
 	decrypted := make([]byte, len(plainText))
@@ -44,9 +44,6 @@ func (this *AesCrypto) Decode(cryptText []byte) (plainText []byte, err error) {
 		}
 	}()
 
-	if len(this.key) != 16 && len(this.key) != 24 && len(this.key) != 32 {
-		return nil, errors.New("ErrKeyLengthSixteen")
-	}
 	var length = len(cryptText)
 	block, _ := aes.NewCipher(this.key)
 	decrypted := make([]byte, len(cryptText))

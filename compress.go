@@ -44,5 +44,11 @@ func (this *gzipEncoder) Decode(d []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadAll(gzipReader)
+
+	// TODO fix unexpected EOF
+	result, err := ioutil.ReadAll(gzipReader)
+	if err != nil && err.Error() == "unexpected EOF" {
+		return result, nil
+	}
+	return result, err
 }

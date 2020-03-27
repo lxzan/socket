@@ -2,11 +2,13 @@ package socket
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"github.com/json-iterator/go"
 	"io"
 	"net"
+	"time"
 )
 
 type Client struct {
@@ -17,20 +19,24 @@ type Client struct {
 	Option      *DialOption
 	OnMessage   chan *Message
 	OnError     chan error
+	onHandshake chan *Message
 }
 
 type DialOption struct {
-	CompressAlgo
-	CryptoAlgo
-	PrivateKey      string // pem file path
-	PublicKey       string // pem file path
-	CompressMinsize int    // compress only data length >= CompressMinsize
+	serverSide       bool
+	CompressAlgo                   // default gzip
+	CryptoAlgo                     // default RSA-AES
+	HandshakeTimeout time.Duration // handshake timeout
+	PrivateKey       string        // pem file path
+	PublicKey        string        // pem file path
+	CompressMinsize  int           // compress only data length >= CompressMinsize
 }
 
 func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	if opt == nil {
 		opt = &DialOption{}
 	}
+	opt.serverSide = true
 	if opt.CompressAlgo == 0 {
 		opt.CompressAlgo = CompressAlgo_Gzip
 	}
@@ -40,12 +46,16 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	if opt.CompressMinsize == 0 {
 		opt.CompressMinsize = 4 * 1024
 	}
+	if opt.HandshakeTimeout == time.Duration(0) {
+		opt.HandshakeTimeout = 5 * time.Second
+	}
 
 	var client = &Client{
-		conn:      conn,
-		OnMessage: make(chan *Message, 16),
-		OnError:   make(chan error, 16),
-		Option:    opt,
+		conn:        conn,
+		OnMessage:   make(chan *Message, 16),
+		OnError:     make(chan error, 16),
+		onHandshake: make(chan *Message),
+		Option:      opt,
 	}
 	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
 		if opt.PrivateKey == "" {
@@ -74,6 +84,7 @@ func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	if opt == nil {
 		opt = &DialOption{}
 	}
+	opt.serverSide = false
 	if opt.CompressAlgo == 0 {
 		opt.CompressAlgo = CompressAlgo_Gzip
 	}
@@ -83,12 +94,16 @@ func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	if opt.CompressMinsize == 0 {
 		opt.CompressMinsize = 4 * 1024
 	}
+	if opt.HandshakeTimeout == time.Duration(0) {
+		opt.HandshakeTimeout = 5 * time.Second
+	}
 
 	var client = &Client{
-		conn:      conn,
-		OnMessage: make(chan *Message, 16),
-		OnError:   make(chan error, 16),
-		Option:    opt,
+		conn:        conn,
+		OnMessage:   make(chan *Message, 16),
+		OnError:     make(chan error, 16),
+		onHandshake: make(chan *Message),
+		Option:      opt,
 	}
 	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
 		if opt.PublicKey == "" {
@@ -144,9 +159,18 @@ func (this *Client) handleMessage() {
 				this.OnError <- ERR_DecodeMessage.Wrap(err.Error())
 				return
 			}
-			this.OnMessage <- msg
 			rl = 4
 			rlb = true
+
+			if msg.Header.MessageType == HandshakeMessage {
+				if this.Option.serverSide {
+					this.handleHandshake(msg)
+				} else {
+					this.onHandshake <- msg
+				}
+			} else {
+				this.OnMessage <- msg
+			}
 		}
 	}
 }
@@ -227,7 +251,10 @@ func (this *Client) WriteMessage(typ MessageType, header Form, data []byte) (n i
 			p3 = byte(CompressAlgo_NoCompress)
 		}
 	}
-	if this.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
+
+	if typ == HandshakeMessage {
+		p4 = byte(CryptoAlgo_NoCrypto)
+	} else if this.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
 		res, err := this.aes.Encode(p6)
 		if err != nil {
 			return 0, err
@@ -244,4 +271,49 @@ func (this *Client) WriteMessage(typ MessageType, header Form, data []byte) (n i
 	buf.Write(p5)
 	buf.Write(p6)
 	return this.conn.Write(buf.Bytes())
+}
+
+// server side
+func (this *Client) handleHandshake(msg *Message) error {
+	key, err := this.asymmetric.Decode(msg.Body)
+	if err != nil {
+		return err
+	}
+
+	encoder, err := NewAES(key)
+	if err != nil {
+		return err
+	}
+	this.aes = encoder
+
+	_, err = this.WriteMessage(HandshakeMessage, nil, nil)
+	return err
+}
+
+// client side
+func (this *Client) sendHandshake() error {
+	var key = []byte(Alphabet.Generate(16))
+	encryptKey, err := this.asymmetric.Encode(key)
+	if err != nil {
+		return err
+	}
+
+	if _, err := this.WriteMessage(HandshakeMessage, nil, encryptKey); err != nil {
+		return err
+	}
+
+	ctx, _ := context.WithTimeout(context.Background(), this.Option.HandshakeTimeout)
+	for {
+		select {
+		case <-this.onHandshake:
+			encoder, err := NewAES(key)
+			if err != nil {
+				return err
+			}
+			this.aes = encoder
+			return nil
+		case <-ctx.Done():
+			return errors.New("handshake timeout")
+		}
+	}
 }

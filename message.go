@@ -12,6 +12,7 @@ const (
 	BinaryMessage
 	PingMessage
 	PongMessage
+	HandshakeMessage
 	CloseMessage
 )
 

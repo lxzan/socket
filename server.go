@@ -4,7 +4,7 @@ import "net"
 
 type Server struct {
 	OnConnect     func(client *Client)
-	DefaultClient *Client
+	defaultClient *Client
 }
 
 func NewServer(opt *DialOption) *Server {
@@ -13,7 +13,7 @@ func NewServer(opt *DialOption) *Server {
 	if err != nil {
 		panic(err)
 	}
-	s.DefaultClient = client
+	s.defaultClient = client
 	return s
 }
 
@@ -34,7 +34,7 @@ func (this *Server) Run(addr string) error {
 			continue
 		}
 
-		client, err := newClientSideClient(conn, this.DefaultClient.Option)
+		client, err := newServerSideClient(conn, this.defaultClient.Option)
 		if err != nil {
 			return err
 		}

@@ -5,7 +5,10 @@ import (
 )
 
 func main() {
-	s := socket.NewServer(nil)
+	s := socket.NewServer(&socket.DialOption{
+		CryptoAlgo: socket.CryptoAlgo_RsaAes,
+		PrivateKey: "example/cert/prv.pem",
+	})
 
 	s.OnConnect = func(client *socket.Client) {
 		for {
