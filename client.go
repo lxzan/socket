@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	json "github.com/json-iterator/go"
+	"io"
 	"net"
 	"strconv"
 )
@@ -43,36 +44,35 @@ func (this *Client) handleMessage() {
 	var rl uint32 = 4
 	var rlb = true
 	for {
-		pack := make([]byte, this.Option.ReadBufSize)
-		pl, err := this.conn.Read(pack)
+		n, err := io.CopyN(buf, this.conn, int64(rl))
 		if err != nil {
 			this.OnError <- ERR_ReadMessage.Wrap(err.Error())
 			return
 		}
-		buf.Write(pack[:pl])
+		if n != int64(rl) {
+			this.OnError <- ERR_ReadMessage.Wrap("invalid length")
+			return
+		}
 
-		for uint32(buf.Len()) >= rl {
-			var p = make([]byte, rl)
-			_, err = buf.Read(p)
+		frame := make([]byte, rl)
+		_, err = buf.Read(frame)
+		if err != nil {
+			this.OnError <- ERR_ReadMessage.Wrap(err.Error())
+			return
+		}
+
+		if rlb {
+			rl = binary.LittleEndian.Uint32(frame)
+			rlb = false
+		} else {
+			msg, err := this.decodeMessage(frame)
 			if err != nil {
-				this.OnError <- ERR_ReadMessage.Wrap(err.Error())
+				this.OnError <- ERR_DecodeMessage.Wrap(err.Error())
 				return
 			}
-
-			if rlb {
-				rl = binary.LittleEndian.Uint32(p)
-				rlb = false
-			} else {
-				msg, err := this.decodeMessage(p)
-				if err != nil {
-					this.OnError <- ERR_DecodeMessage.Wrap(err.Error())
-					return
-				}
-				this.OnMessage <- msg
-
-				rl = 4
-				rlb = true
-			}
+			this.OnMessage <- msg
+			rl = 4
+			rlb = true
 		}
 	}
 }

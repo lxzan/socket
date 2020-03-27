@@ -12,7 +12,7 @@ func main() {
 		for {
 			select {
 			case msg := <-client.OnMessage:
-				err := ioutil.WriteFile(`C:\Users\Caster\Desktop\WorkPlace\socket\runtime\test.jpg`, msg.Body, 0755)
+				err := ioutil.WriteFile(`/Users/Caster/MyWork/socket/runtime/test.jpg`, msg.Body, 0755)
 				println(&err)
 			case err := <-client.OnError:
 				println(err.Error())

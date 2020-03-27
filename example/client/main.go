@@ -13,7 +13,7 @@ func main() {
 		return
 	}
 
-	p := `C:\Users\Caster\Pictures\9c041d42bb028db839b5a67031887cdb.jpg`
+	p := "/Users/Caster/Downloads/UYN`L`WOG$HXB7YA@C(}48F.jpg"
 	f, _ := ioutil.ReadFile(p)
 	//client.WriteMessage(socket.BinaryMessage, nil, []byte("hello"))
 	_, err = client.WriteMessage(socket.BinaryMessage, nil, f)
