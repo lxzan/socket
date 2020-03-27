@@ -3,7 +3,6 @@ package socket
 import "net"
 
 type Server struct {
-	OnConnect     func(client *Client)
 	defaultClient *Client
 }
 
@@ -17,12 +16,7 @@ func NewServer(opt *DialOption) *Server {
 	return s
 }
 
-func (this *Server) Run(addr string) error {
-
-	if this.OnConnect == nil {
-		this.OnConnect = func(client *Client) {}
-	}
-
+func (this *Server) Run(addr string, onconnect func(client *Client)) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -39,7 +33,8 @@ func (this *Server) Run(addr string) error {
 			return err
 		}
 
-		go this.OnConnect(client)
-		client.handleMessage()
+		go onconnect(client)
+
+		go client.handleMessage()
 	}
 }

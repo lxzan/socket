@@ -1,4 +1,4 @@
-### Universe Socket Communication Protocol
+### Universal Socket Communication Protocol
 
 - Server
 ```go
@@ -14,21 +14,17 @@
     		PrivateKey: "example/cert/prv.pem",
     	})
     
-    	s.OnConnect = func(client *socket.Client) {
+    	s.Run(":9090", func(client *socket.Client) {
     		for {
     			select {
-    			case msg := <-client.OnMessage:
-    				println(string(msg.Body))
+    			case msg:=<-client.OnMessage:
+    			    println(&msg.Body)
     			case err := <-client.OnError:
     				println(err.Error())
     				return
     			}
     		}
-    	}
-    
-    	if err := s.Run(":9090"); err != nil {
-    		println(err.Error())
-    	}
+    	})
     }
 
 ```

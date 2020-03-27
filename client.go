@@ -22,21 +22,10 @@ type Client struct {
 	onHandshake chan *Message
 }
 
-type DialOption struct {
-	serverSide       bool
-	CompressAlgo                   // default gzip
-	CryptoAlgo                     // default RSA-AES
-	HandshakeTimeout time.Duration // handshake timeout
-	PrivateKey       string        // pem file path
-	PublicKey        string        // pem file path
-	CompressMinsize  int           // compress only data length >= CompressMinsize
-}
-
-func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
+func initClient(conn net.Conn, opt *DialOption) *Client {
 	if opt == nil {
 		opt = &DialOption{}
 	}
-	opt.serverSide = true
 	if opt.CompressAlgo == 0 {
 		opt.CompressAlgo = CompressAlgo_Gzip
 	}
@@ -57,6 +46,18 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 		onHandshake: make(chan *Message),
 		Option:      opt,
 	}
+	if opt.CompressAlgo != CompressAlgo_NoCompress {
+		if opt.CompressAlgo == CompressAlgo_Gzip {
+			client.compression = GzipEncoder
+		}
+	}
+	return client
+}
+
+func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
+	var client = initClient(conn, opt)
+	client.Option.serverSide = true
+
 	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
 		if opt.PrivateKey == "" {
 			return nil, errors.New("private key not set")
@@ -71,40 +72,13 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 		}
 	}
 
-	if opt.CompressAlgo != CompressAlgo_NoCompress {
-		if opt.CompressAlgo == CompressAlgo_Gzip {
-			client.compression = GzipEncoder
-		}
-	}
-
 	return client, nil
 }
 
 func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
-	if opt == nil {
-		opt = &DialOption{}
-	}
-	opt.serverSide = false
-	if opt.CompressAlgo == 0 {
-		opt.CompressAlgo = CompressAlgo_Gzip
-	}
-	if opt.CryptoAlgo == 0 {
-		opt.CryptoAlgo = CryptoAlgo_NoCrypto
-	}
-	if opt.CompressMinsize == 0 {
-		opt.CompressMinsize = 4 * 1024
-	}
-	if opt.HandshakeTimeout == time.Duration(0) {
-		opt.HandshakeTimeout = 5 * time.Second
-	}
+	var client = initClient(conn, opt)
+	client.Option.serverSide = false
 
-	var client = &Client{
-		conn:        conn,
-		OnMessage:   make(chan *Message, 16),
-		OnError:     make(chan error, 16),
-		onHandshake: make(chan *Message),
-		Option:      opt,
-	}
 	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
 		if opt.PublicKey == "" {
 			return nil, errors.New("public key not set")
@@ -116,12 +90,6 @@ func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 			} else {
 				client.asymmetric = rsa
 			}
-		}
-	}
-
-	if opt.CompressAlgo != CompressAlgo_NoCompress {
-		if opt.CompressAlgo == CompressAlgo_Gzip {
-			client.compression = GzipEncoder
 		}
 	}
 
