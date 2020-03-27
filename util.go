@@ -24,3 +24,7 @@ func (c RandomString) Generate(n int) string {
 	}
 	return string(b)
 }
+
+func MTS() int64 {
+	return time.Now().UnixNano() / 1000000
+}

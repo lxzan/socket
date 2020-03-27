@@ -41,7 +41,7 @@ const (
 )
 
 type Message struct {
-	Header Header
+	Header *Header
 	Body   []byte
 }
 
@@ -51,16 +51,16 @@ type Header struct {
 	CompressAlgorithm CompressAlgo
 	CryptoAlgorithm   CryptoAlgo
 	HeaderLength      uint16
-	form              Form
+	Form              Form
 }
 
 func (this *Header) Get(k string) (string, bool) {
-	v, ok := this.form[k]
+	v, ok := this.Form[k]
 	return v, ok
 }
 
 func (this *Header) decodeProtocolHeader(d []byte) error {
-	this.form = Form{}
+	this.Form = Form{}
 	var p1 = d[0]
 	if protocol, ok := protocolMapping[p1]; ok {
 		this.ProtocolVersion = protocol

@@ -1,21 +1,22 @@
 package socket
 
 import (
+	"context"
 	"net"
 	"time"
 )
 
 type DialOption struct {
-	serverSide       bool
-	CompressAlgo                   // default gzip
-	CryptoAlgo                     // default RSA-AES
-	HandshakeTimeout time.Duration // default 5s
-	PrivateKey       string        // pem file path
-	PublicKey        string        // pem file path
-	CompressMinsize  int           // compress data when dataLength>=CompressMinsize
+	serverSide      bool
+	CompressAlgo                  // default gzip
+	CryptoAlgo                    // default RSA-AES
+	PrivateKey      string        // pem file path
+	PublicKey       string        // pem file path
+	CompressMinsize int           // compress data when dataLength>=CompressMinsize
+	IoTimeout       time.Duration // io timeout
 }
 
-func Dial(addr string, opt *DialOption) (*Client, error) {
+func Dial(ctx context.Context, addr string, opt *DialOption) (*Client, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -29,10 +30,19 @@ func Dial(addr string, opt *DialOption) (*Client, error) {
 	go client.handleMessage()
 
 	if client.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
-		if err := client.sendHandshake(); err != nil {
+		if err := client.sendHandshake(ctx); err != nil {
 			return nil, err
 		}
 	}
+
+	//go func() {
+	//	ticker := time.NewTicker(5 * time.Second)
+	//	defer ticker.Stop()
+	//	for {
+	//		<-ticker.C
+	//		client.Send(PingMessage, nil)
+	//	}
+	//}()
 
 	return client, nil
 }

@@ -1,11 +1,15 @@
 package main
 
-import "github.com/lxzan/socket"
+import (
+	"context"
+	"github.com/lxzan/socket"
+)
 
 func main() {
-	for i := 0; i < 100; i++ {
+	println("start...")
+	for i := 0; i < 1; i++ {
 		go func() {
-			client, err := socket.Dial("127.0.0.1:9090", &socket.DialOption{
+			client, err := socket.Dial(context.Background(), "127.0.0.1:9090", &socket.DialOption{
 				//CryptoAlgo: socket.CryptoAlgo_RsaAes,
 				//PublicKey:  "example/cert/pub.pem",
 			})
@@ -14,13 +18,19 @@ func main() {
 				return
 			}
 
-			for j := 0; j < 10000; j++ {
-				_, err = client.WriteMessage(socket.TextMessage, nil, []byte("hello world!"))
+			for j := 0; j < 1; j++ {
+				_, err = client.Send(socket.TextMessage, &socket.Message{Body: []byte("hello, ")})
 				if err != nil {
 					println(err.Error())
 				}
 			}
+
+			for {
+				msg := <-client.OnMessage
+				println(string(msg.Body))
+			}
 		}()
+
 	}
 
 	select {}
