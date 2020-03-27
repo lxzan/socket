@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	json "github.com/json-iterator/go"
+	"github.com/json-iterator/go"
 	"io"
 	"net"
 	"strconv"
@@ -12,31 +12,106 @@ import (
 
 type Client struct {
 	conn        net.Conn
+	asymmetric  Encoder
 	aes         Encoder
 	compression Encoder
-	Option      *ClientOption
+	Option      *DialOption
 	OnMessage   chan *Message
 	OnError     chan error
 }
 
-type ClientOption struct {
-	ReadBufSize int64
+type DialOption struct {
+	CompressAlgo
+	CryptoAlgo
+	PrivateKey      string // pem file path
+	PublicKey       string // pem file path
+	CompressMinsize int    // compress only data length >= CompressMinsize
 }
 
-func newClient(conn net.Conn, opt *ClientOption) *Client {
+func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	if opt == nil {
-		opt = &ClientOption{}
+		opt = &DialOption{}
 	}
-	if opt.ReadBufSize == 0 {
-		opt.ReadBufSize = 2048
+	if opt.CompressAlgo == 0 {
+		opt.CompressAlgo = CompressAlgo_Gzip
+	}
+	if opt.CryptoAlgo == 0 {
+		opt.CryptoAlgo = CryptoAlgo_NoCrypto
+	}
+	if opt.CompressMinsize == 0 {
+		opt.CompressMinsize = 4 * 1024
 	}
 
-	return &Client{
+	var client = &Client{
 		conn:      conn,
 		OnMessage: make(chan *Message, 16),
 		OnError:   make(chan error, 16),
 		Option:    opt,
 	}
+	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
+		if opt.PrivateKey == "" {
+			return nil, errors.New("private key not set")
+		}
+		if opt.CryptoAlgo == CryptoAlgo_RsaAes {
+			rsa, err := NewRSA(opt.PublicKey, opt.PrivateKey)
+			if err != nil {
+				return nil, err
+			} else {
+				client.asymmetric = rsa
+			}
+		}
+	}
+
+	if opt.CompressAlgo != CompressAlgo_NoCompress {
+		if opt.CompressAlgo == CompressAlgo_Gzip {
+			client.compression = GzipEncoder
+		}
+	}
+
+	return client, nil
+}
+
+func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
+	if opt == nil {
+		opt = &DialOption{}
+	}
+	if opt.CompressAlgo == 0 {
+		opt.CompressAlgo = CompressAlgo_Gzip
+	}
+	if opt.CryptoAlgo == 0 {
+		opt.CryptoAlgo = CryptoAlgo_NoCrypto
+	}
+	if opt.CompressMinsize == 0 {
+		opt.CompressMinsize = 4 * 1024
+	}
+
+	var client = &Client{
+		conn:      conn,
+		OnMessage: make(chan *Message, 16),
+		OnError:   make(chan error, 16),
+		Option:    opt,
+	}
+	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
+		if opt.PublicKey == "" {
+			return nil, errors.New("public key not set")
+		}
+		if opt.CryptoAlgo == CryptoAlgo_RsaAes {
+			rsa, err := NewRSA(opt.PublicKey, opt.PrivateKey)
+			if err != nil {
+				return nil, err
+			} else {
+				client.asymmetric = rsa
+			}
+		}
+	}
+
+	if opt.CompressAlgo != CompressAlgo_NoCompress {
+		if opt.CompressAlgo == CompressAlgo_Gzip {
+			client.compression = GzipEncoder
+		}
+	}
+
+	return client, nil
 }
 
 func (this *Client) handleMessage() {
@@ -50,7 +125,7 @@ func (this *Client) handleMessage() {
 			return
 		}
 		if n != int64(rl) {
-			this.OnError <- ERR_ReadMessage.Wrap("invalid length")
+			this.OnError <- ERR_ReadMessage.Wrap("data length error")
 			return
 		}
 
@@ -78,71 +153,91 @@ func (this *Client) handleMessage() {
 }
 
 func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
-	msg = &Message{
-		Header: Form{},
-	}
+	msg = &Message{Header: Header{}}
 	var totalLength = len(data)
-
-	if totalLength < 4 {
-		return nil, errors.New("receive invalid data")
+	if totalLength < 6 {
+		return nil, errors.New("received invalid data")
 	}
-
-	var cryptoAlgo = CryptoAlgo(data[0])
-	var compressionAlgo = CompressionAlgo(data[1])
-
-	var b1 = data[2:4]
-	var headerLength = binary.LittleEndian.Uint16(b1)
-
-	var b2 []byte
-	if compressionAlgo == CompressionAlgo_Gzip {
-		tmp, err := GzipEncoder.Decode(data[4:])
-		if err != nil {
-			return nil, err
-		}
-		b2 = tmp
-	} else {
-		b2 = data[4:]
-	}
-
-	var b3 []byte
-	if cryptoAlgo == CryptoAlgo_RsaAes {
-		tmp, err := this.aes.Decode(b2)
-		if err != nil {
-			return nil, err
-		}
-		b3 = tmp
-	} else {
-		b3 = data[4:]
-	}
-
-	if err := json.Unmarshal(b3[:headerLength], &msg.Header); err != nil {
+	if err := msg.Header.decodeProtocolHeader(data); err != nil {
 		return nil, err
 	}
 
-	msg.Body = b3[headerLength:]
+	msg.Body = data[6+msg.Header.HeaderLength:]
+	if msg.Header.CryptoAlgorithm != CryptoAlgo_NoCrypto {
+		body, err := this.aes.Decode(msg.Body)
+		if err != nil {
+			return nil, err
+		} else {
+			msg.Body = body
+		}
+	}
+
+	if msg.Header.CompressAlgorithm != CompressAlgo_NoCompress {
+		body, err := this.compression.Decode(msg.Body)
+		if err != nil {
+			return nil, err
+		} else {
+			msg.Body = body
+		}
+	}
+
+	if err := jsoniter.Unmarshal(msg.Body[6:6+msg.Header.HeaderLength], &msg.Header.form); err != nil {
+		return nil, err
+	}
 
 	return msg, nil
 }
 
+// p0: Content Length 4B
+// p1: Protocol Version 1B
+// p2: Message Type 1B
+// p3: Compression Algorithm 1B
+// p4: Crypto Algorithm 1B
+// p5: Header Length 2B
+// p6: UserHeader and Body
 func (this *Client) WriteMessage(typ MessageType, header Form, data []byte) (n int, err error) {
 	if header == nil {
 		header = Form{}
 	}
 	header["MessageType"] = strconv.Itoa(int(typ))
 
-	var b0 = make([]byte, 4)
-	var b1 = byte(0)
-	var b2 = byte(0)
-	var b3 = make([]byte, 2)
-	var b4, _ = json.Marshal(header)
-	var headerLength = len(b4)
-	binary.LittleEndian.PutUint16(b3, uint16(headerLength))
-	binary.LittleEndian.PutUint32(b0, uint32(4+len(b4)+len(data)))
+	var p0 = make([]byte, 4)
+	var p1 = byte(currentProtocol)
+	var p2 = byte(typ)
+	var p3 = byte(this.Option.CompressAlgo)
+	var p4 = byte(this.Option.CryptoAlgo)
+	var p5 = make([]byte, 2)
+	var p6, _ = jsoniter.Marshal(header)
+	var headerLength = len(p6)
 
-	var buf = bytes.NewBuffer(b0)
-	buf.Write([]byte{b1, b2})
-	buf.Write(b3)
-	buf.Write(b4)
-	buf.Write(data)
+	p6 = append(p6, data...)
+	if this.Option.CompressAlgo != CompressAlgo_NoCompress {
+		if len(p6) >= this.Option.CompressMinsize {
+			res, err := this.compression.Encode(p6)
+			if err != nil {
+				return 0, err
+			} else {
+				p6 = res
+			}
+		} else {
+			p3 = byte(CompressAlgo_NoCompress)
+		}
+	}
+	if this.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
+		res, err := this.aes.Encode(p6)
+		if err != nil {
+			return 0, err
+		} else {
+			p6 = res
+		}
+	}
+
+	binary.LittleEndian.PutUint16(p5, uint16(headerLength))
+	binary.LittleEndian.PutUint32(p0, uint32(6+len(p6)))
+
+	var buf = bytes.NewBuffer(p0)
+	buf.Write([]byte{p1, p2, p3, p4})
+	buf.Write(p5)
+	buf.Write(p6)
 	return this.conn.Write(buf.Bytes())
 }

@@ -7,7 +7,7 @@ import (
 
 func main() {
 	println("start...")
-	client, err := socket.Dial("127.0.0.1:9090")
+	client, err := socket.Dial("127.0.0.1:9090", nil)
 	if err != nil {
 		println(err.Error())
 		return

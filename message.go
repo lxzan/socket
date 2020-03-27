@@ -1,8 +1,8 @@
 package socket
 
 import (
-	jsoniter "github.com/json-iterator/go"
-	"strconv"
+	"encoding/binary"
+	"errors"
 )
 
 type MessageType uint8
@@ -22,44 +22,55 @@ const (
 	CryptoAlgo_RsaAes
 )
 
-type CompressionAlgo uint8
+type CompressAlgo uint8
 
 const (
-	CompressionAlgo_NoCompression CompressionAlgo = iota
-	CompressionAlgo_Gzip
+	CompressAlgo_NoCompress CompressAlgo = iota
+	CompressAlgo_Gzip
+)
+
+var (
+	protocolMapping = map[byte]string{
+		0: "1.0",
+	}
+)
+
+const (
+	currentProtocol = 0 // 1.0
 )
 
 type Message struct {
-	Header map[string]string
+	Header Header
 	Body   []byte
 }
 
 type Header struct {
-	CompressionAlgo
-	CryptoAlgo
-	form Form
+	ProtocolVersion   string
+	MessageType       MessageType
+	CompressAlgorithm CompressAlgo
+	CryptoAlgorithm   CryptoAlgo
+	HeaderLength      uint16
+	form              Form
 }
 
-func (this *Header) Get(k string) string {
-	return this.form[k]
+func (this *Header) Get(k string) (string, bool) {
+	v, ok := this.form[k]
+	return v, ok
 }
 
-func decodeHeader(d []byte) (*Header, error) {
-	var header = &Header{form: Form{}}
-	if err := jsoniter.Unmarshal(d, &header.form); err != nil {
-		return nil, err
+func (this *Header) decodeProtocolHeader(d []byte) error {
+	this.form = Form{}
+	var p1 = d[0]
+	if protocol, ok := protocolMapping[p1]; ok {
+		this.ProtocolVersion = protocol
+	} else {
+		return errors.New("unsupported protocol version")
 	}
 
-	if num, err := strconv.Atoi(header.form["CompressionAlgo"]); err != nil {
-		return nil, err
-	} else {
-		header.CompressionAlgo = CompressionAlgo(num)
-	}
+	this.MessageType = MessageType(d[1])
+	this.CompressAlgorithm = CompressAlgo(d[2])
+	this.CryptoAlgorithm = CryptoAlgo(d[3])
+	this.HeaderLength = binary.LittleEndian.Uint16(d[4:6])
 
-	if num, err := strconv.Atoi(header.form["CryptoAlgo"]); err != nil {
-		return nil, err
-	} else {
-		header.CryptoAlgo = CryptoAlgo(num)
-	}
-	return header, nil
+	return nil
 }

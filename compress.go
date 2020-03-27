@@ -35,7 +35,12 @@ func (this *gzipEncoder) Encode(d []byte) ([]byte, error) {
 func (this *gzipEncoder) Decode(d []byte) ([]byte, error) {
 	var r = bytes.NewReader(d)
 	gzipReader, err := gzip.NewReader(r)
-	defer gzipReader.Close()
+	defer func() {
+		if gzipReader != nil {
+			gzipReader.Close()
+		}
+	}()
+
 	if err != nil {
 		return nil, err
 	}

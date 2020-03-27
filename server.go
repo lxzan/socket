@@ -3,25 +3,24 @@ package socket
 import "net"
 
 type Server struct {
-	ReadBufSize int64
-	OnError     func(err error)
-	OnConnect   func(client *Client)
+	OnConnect     func(client *Client)
+	DefaultClient *Client
 }
 
-func NewServer() *Server {
-	return new(Server)
+func NewServer(opt *DialOption) *Server {
+	s := new(Server)
+	client, err := newServerSideClient(nil, opt)
+	if err != nil {
+		panic(err)
+	}
+	s.DefaultClient = client
+	return s
 }
 
 func (this *Server) Run(addr string) error {
-	if this.ReadBufSize == 0 {
-		this.ReadBufSize = 2048
-	}
 
 	if this.OnConnect == nil {
 		this.OnConnect = func(client *Client) {}
-	}
-	if this.OnError == nil {
-		this.OnError = func(err error) {}
 	}
 
 	listener, err := net.Listen("tcp", addr)
@@ -32,11 +31,14 @@ func (this *Server) Run(addr string) error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			this.OnError(err)
 			continue
 		}
 
-		client := newClient(conn, nil)
+		client, err := newClientSideClient(conn, this.DefaultClient.Option)
+		if err != nil {
+			return err
+		}
+
 		go this.OnConnect(client)
 		client.handleMessage()
 	}

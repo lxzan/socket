@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	s := socket.NewServer()
+	s := socket.NewServer(nil)
 
 	s.OnConnect = func(client *socket.Client) {
 		for {
