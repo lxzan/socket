@@ -35,14 +35,14 @@ func Dial(ctx context.Context, addr string, opt *DialOption) (*Client, error) {
 		}
 	}
 
-	//go func() {
-	//	ticker := time.NewTicker(5 * time.Second)
-	//	defer ticker.Stop()
-	//	for {
-	//		<-ticker.C
-	//		client.Send(PingMessage, nil)
-	//	}
-	//}()
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			client.Send(PingMessage, nil)
+		}
+	}()
 
 	return client, nil
 }
