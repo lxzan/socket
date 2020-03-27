@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/lxzan/socket"
-	"io/ioutil"
 )
 
 func main() {
@@ -13,10 +12,10 @@ func main() {
 		return
 	}
 
-	p := "/Users/Caster/Downloads/UYN`L`WOG$HXB7YA@C(}48F.jpg"
-	f, _ := ioutil.ReadFile(p)
-	//client.WriteMessage(socket.BinaryMessage, nil, []byte("hello"))
-	_, err = client.WriteMessage(socket.BinaryMessage, nil, f)
+	//p := "/Users/Caster/Downloads/UYN`L`WOG$HXB7YA@C(}48F.jpg"
+	//f, _ := ioutil.ReadFile(p)
+	client.WriteMessage(socket.BinaryMessage, nil, []byte("hello world!"))
+	//_, err = client.WriteMessage(socket.BinaryMessage, nil, f)
 	if err != nil {
 		println(err.Error())
 	}

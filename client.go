@@ -7,7 +7,6 @@ import (
 	"github.com/json-iterator/go"
 	"io"
 	"net"
-	"strconv"
 )
 
 type Client struct {
@@ -162,7 +161,7 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 		return nil, err
 	}
 
-	msg.Body = data[6+msg.Header.HeaderLength:]
+	msg.Body = data[6:]
 	if msg.Header.CryptoAlgorithm != CryptoAlgo_NoCrypto {
 		body, err := this.aes.Decode(msg.Body)
 		if err != nil {
@@ -181,10 +180,13 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 		}
 	}
 
-	if err := jsoniter.Unmarshal(msg.Body[6:6+msg.Header.HeaderLength], &msg.Header.form); err != nil {
-		return nil, err
+	if msg.Header.HeaderLength > 0 {
+		if err := jsoniter.Unmarshal(msg.Body[:msg.Header.HeaderLength], &msg.Header.form); err != nil {
+			return nil, err
+		}
 	}
 
+	msg.Body = msg.Body[msg.Header.HeaderLength:]
 	return msg, nil
 }
 
@@ -199,7 +201,6 @@ func (this *Client) WriteMessage(typ MessageType, header Form, data []byte) (n i
 	if header == nil {
 		header = Form{}
 	}
-	header["MessageType"] = strconv.Itoa(int(typ))
 
 	var p0 = make([]byte, 4)
 	var p1 = byte(currentProtocol)
@@ -207,9 +208,12 @@ func (this *Client) WriteMessage(typ MessageType, header Form, data []byte) (n i
 	var p3 = byte(this.Option.CompressAlgo)
 	var p4 = byte(this.Option.CryptoAlgo)
 	var p5 = make([]byte, 2)
-	var p6, _ = jsoniter.Marshal(header)
-	var headerLength = len(p6)
+	var p6 []byte
+	if len(header) > 0 {
+		p6, _ = jsoniter.Marshal(header)
+	}
 
+	var headerLength = len(p6)
 	p6 = append(p6, data...)
 	if this.Option.CompressAlgo != CompressAlgo_NoCompress {
 		if len(p6) >= this.Option.CompressMinsize {
