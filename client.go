@@ -12,16 +12,14 @@ import (
 )
 
 type Client struct {
-	conn         net.Conn
-	asymmetric   Encoder
-	aes          Encoder
-	compression  Encoder
-	Option       *DialOption
-	OnMessage    chan *Message
-	OnError      chan error
-	onHandshake  chan *Message
-	lastPingTime int64
-	lastPongTime int64
+	conn        net.Conn
+	asymmetric  Encoder
+	aes         Encoder
+	compression Encoder
+	Option      *DialOption
+	OnMessage   chan *Message
+	OnError     chan error
+	onHandshake chan *Message
 }
 
 func initClient(conn net.Conn, opt *DialOption) *Client {
@@ -37,8 +35,11 @@ func initClient(conn net.Conn, opt *DialOption) *Client {
 	if opt.CompressMinsize == 0 {
 		opt.CompressMinsize = 4 * 1024
 	}
-	if opt.IoTimeout == 0 {
-		opt.IoTimeout = time.Minute
+	if opt.HeartbeatTimeout == 0 {
+		opt.HeartbeatTimeout = time.Minute
+	}
+	if opt.PingInterval == 0 {
+		opt.PingInterval = 5 * time.Second
 	}
 
 	var client = &Client{
@@ -60,7 +61,7 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	var client = initClient(conn, opt)
 	client.Option.serverSide = true
 	if client.conn != nil {
-		err := client.conn.SetReadDeadline(time.Now().Add(client.Option.IoTimeout))
+		err := client.conn.SetReadDeadline(time.Now().Add(client.Option.HeartbeatTimeout))
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +87,7 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	var client = initClient(conn, opt)
 	client.Option.serverSide = false
-	err := client.conn.SetWriteDeadline(time.Now().Add(client.Option.IoTimeout))
+	err := client.conn.SetWriteDeadline(time.Now().Add(client.Option.HeartbeatTimeout))
 	if err != nil {
 		return nil, err
 	}
@@ -152,17 +153,15 @@ func (this *Client) handleMessage() {
 			case BinaryMessage, TextMessage:
 				this.OnMessage <- msg
 			case PingMessage:
-				this.lastPingTime = MTS()
 				if this.Option.serverSide {
-					this.conn.SetReadDeadline(time.Now().Add(this.Option.IoTimeout))
+					this.conn.SetReadDeadline(time.Now().Add(this.Option.HeartbeatTimeout))
 					if _, err := this.Send(PongMessage, nil); err != nil {
 						this.OnError <- err
 					}
 				}
 			case PongMessage:
-				this.lastPongTime = MTS()
 				if !this.Option.serverSide {
-					this.conn.SetWriteDeadline(time.Now().Add(this.Option.IoTimeout))
+					this.conn.SetWriteDeadline(time.Now().Add(this.Option.HeartbeatTimeout))
 				}
 			}
 		}
@@ -306,31 +305,4 @@ func (this *Client) handleHandshake(msg *Message) error {
 
 	_, err = this.Send(HandshakeMessage, nil)
 	return err
-}
-
-// client side
-func (this *Client) sendHandshake(ctx context.Context) error {
-	var key = []byte(Alphabet.Generate(16))
-	encryptKey, err := this.asymmetric.Encode(key)
-	if err != nil {
-		return err
-	}
-
-	if _, err := this.Send(HandshakeMessage, &Message{Body: encryptKey}); err != nil {
-		return err
-	}
-
-	for {
-		select {
-		case <-this.onHandshake:
-			encoder, err := NewAES(key)
-			if err != nil {
-				return err
-			}
-			this.aes = encoder
-			return nil
-		case <-ctx.Done():
-			return errors.New("handshake timeout")
-		}
-	}
 }
