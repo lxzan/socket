@@ -26,8 +26,13 @@ func main() {
 			}
 
 			for {
-				msg := <-client.OnMessage
-				println(string(msg.Body))
+				select {
+				case msg := <-client.OnMessage:
+					println(string(msg.Body))
+				case err := <-client.OnError:
+					println(err.Error())
+					return
+				}
 			}
 		}()
 

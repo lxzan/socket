@@ -42,11 +42,10 @@ func initClient(conn net.Conn, opt *DialOption) *Client {
 	}
 
 	var client = &Client{
-		conn:        conn,
-		OnMessage:   make(chan *Message, 16),
-		OnError:     make(chan error, 16),
-		onHandshake: make(chan *Message),
-		Option:      opt,
+		conn:      conn,
+		OnMessage: make(chan *Message, 16),
+		OnError:   make(chan error, 16),
+		Option:    opt,
 	}
 	return client
 }
@@ -81,6 +80,7 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 	var client = initClient(conn, opt)
 	client.Option.serverSide = false
+	client.onHandshake = make(chan *Message)
 	err := client.conn.SetWriteDeadline(time.Now().Add(client.Option.HeartbeatTimeout))
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 		}
 	}
 
-	if body, err := uncompress(this.Option.CompressAlgo, msg.Body); err != nil {
+	if body, err := uncompress(msg.Header.CompressAlgorithm, msg.Body); err != nil {
 		return nil, err
 	} else {
 		msg.Body = body
@@ -265,6 +265,7 @@ func (this *Client) Send(typ MessageType, msg *Message) (n int, err error) {
 
 func (this *Client) SendContext(ctx context.Context, typ MessageType, msg *Message) (n int, err error) {
 	var sig = make(chan bool)
+	defer close(sig)
 
 	go func() {
 		n, err = this.Send(typ, msg)
