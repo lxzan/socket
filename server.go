@@ -1,22 +1,51 @@
 package socket
 
-import "net"
+import (
+	"net"
+	"time"
+)
 
 type Server struct {
-	defaultClient *Client
+	*Option
 }
 
-func NewServer(opt *DialOption) *Server {
-	s := new(Server)
-	client, err := newServerSideClient(nil, opt)
-	if err != nil {
-		panic(err)
+type Option struct {
+	CompressAlgo                   // default gzip
+	CryptoAlgo                     // default RSA-AES
+	PublicKey        string        // pem file path
+	PrivateKey       string        // pem file path
+	MinCompressSize  int           // compress data when dataLength>=CompressMinsize
+	HeartbeatTimeout time.Duration // io timeout
+	PingInterval     time.Duration // ping interval
+}
+
+func (this *Option) initialize() {
+	if this.CompressAlgo == 0 {
+		this.CompressAlgo = CompressAlgo_Gzip
 	}
-	s.defaultClient = client
-	return s
+	if this.CryptoAlgo == 0 {
+		this.CryptoAlgo = CryptoAlgo_NoCrypto
+	}
+	if this.MinCompressSize == 0 {
+		this.MinCompressSize = 4 * 1024
+	}
+	if this.HeartbeatTimeout == 0 {
+		this.HeartbeatTimeout = time.Minute
+	}
+	if this.PingInterval == 0 {
+		this.PingInterval = 5 * time.Second
+	}
 }
 
-func (this *Server) Run(addr string, onconnect func(client *Client)) error {
+func NewServer(opt *Option) *Server {
+	if opt == nil {
+		opt = &Option{}
+	}
+	opt.initialize()
+	return &Server{Option: opt}
+}
+
+func (this *Server) Run(addr string, onconnect func(client *Conn)) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -28,7 +57,7 @@ func (this *Server) Run(addr string, onconnect func(client *Client)) error {
 			continue
 		}
 
-		client, err := newServerSideClient(conn, this.defaultClient.Option)
+		client, err := newConn(conn, this.Option)
 		if err != nil {
 			return err
 		}

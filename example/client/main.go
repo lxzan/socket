@@ -9,7 +9,7 @@ func main() {
 	println("start...")
 	for i := 0; i < 1; i++ {
 		go func() {
-			client, err := socket.Dial(context.Background(), "127.0.0.1:9090", &socket.DialOption{
+			client, err := socket.Dial(context.Background(), "127.0.0.1:9090", &socket.Option{
 				//CryptoAlgo: socket.CryptoAlgo_RsaAes,
 				//PublicKey:  "example/cert/pub.pem",
 			})

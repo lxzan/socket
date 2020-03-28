@@ -5,12 +5,12 @@ import (
 )
 
 func main() {
-	s := socket.NewServer(&socket.DialOption{
+	s := socket.NewServer(&socket.Option{
 		//CryptoAlgo: socket.CryptoAlgo_RsaAes,
 		//PrivateKey: "example/cert/prv.pem",
 	})
 
-	s.Run(":9090", func(client *socket.Client) {
+	s.Run(":9090", func(client *socket.Conn) {
 		for {
 			select {
 			case msg := <-client.OnMessage:
