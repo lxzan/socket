@@ -28,6 +28,7 @@ type CompressAlgo uint8
 const (
 	CompressAlgo_NoCompress CompressAlgo = iota
 	CompressAlgo_Gzip
+	CompressAlgo_Flate
 )
 
 var (

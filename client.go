@@ -13,9 +13,8 @@ import (
 
 type Client struct {
 	conn        net.Conn
-	asymmetric  Encoder
-	aes         Encoder
-	compression Encoder
+	asymmetric  Crypto
+	aes         Crypto
 	Option      *DialOption
 	OnMessage   chan *Message
 	OnError     chan error
@@ -49,11 +48,6 @@ func initClient(conn net.Conn, opt *DialOption) *Client {
 		onHandshake: make(chan *Message),
 		Option:      opt,
 	}
-	if opt.CompressAlgo != CompressAlgo_NoCompress {
-		if opt.CompressAlgo == CompressAlgo_Gzip {
-			client.compression = GzipEncoder
-		}
-	}
 	return client
 }
 
@@ -72,7 +66,7 @@ func newServerSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 			return nil, errors.New("private key not set")
 		}
 		if opt.CryptoAlgo == CryptoAlgo_RsaAes {
-			rsa, err := NewRSA(opt.PublicKey, opt.PrivateKey)
+			rsa, err := NewRsaCrypto(opt.PublicKey, opt.PrivateKey)
 			if err != nil {
 				return nil, err
 			} else {
@@ -97,7 +91,7 @@ func newClientSideClient(conn net.Conn, opt *DialOption) (*Client, error) {
 			return nil, errors.New("public key not set")
 		}
 		if opt.CryptoAlgo == CryptoAlgo_RsaAes {
-			rsa, err := NewRSA(opt.PublicKey, opt.PrivateKey)
+			rsa, err := NewRsaCrypto(opt.PublicKey, opt.PrivateKey)
 			if err != nil {
 				return nil, err
 			} else {
@@ -180,7 +174,7 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 
 	msg.Body = data[6:]
 	if msg.Header.CryptoAlgorithm != CryptoAlgo_NoCrypto {
-		body, err := this.aes.Decode(msg.Body)
+		body, err := this.aes.Decrypt(msg.Body)
 		if err != nil {
 			return nil, err
 		} else {
@@ -188,13 +182,10 @@ func (this *Client) decodeMessage(data []byte) (msg *Message, err error) {
 		}
 	}
 
-	if msg.Header.CompressAlgorithm != CompressAlgo_NoCompress {
-		body, err := this.compression.Decode(msg.Body)
-		if err != nil {
-			return nil, err
-		} else {
-			msg.Body = body
-		}
+	if body, err := uncompress(this.Option.CompressAlgo, msg.Body); err != nil {
+		return nil, err
+	} else {
+		msg.Body = body
 	}
 
 	if msg.Header.HeaderLength > 0 {
@@ -242,7 +233,7 @@ func (this *Client) Send(typ MessageType, msg *Message) (n int, err error) {
 	}
 	if this.Option.CompressAlgo != CompressAlgo_NoCompress {
 		if len(p6) >= this.Option.CompressMinsize {
-			res, err := this.compression.Encode(p6)
+			res, err := compress(this.Option.CompressAlgo, p6)
 			if err != nil {
 				return 0, err
 			} else {
@@ -254,7 +245,7 @@ func (this *Client) Send(typ MessageType, msg *Message) (n int, err error) {
 	}
 
 	if this.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
-		res, err := this.aes.Encode(p6)
+		res, err := this.aes.Encrypt(p6)
 		if err != nil {
 			return 0, err
 		} else {
@@ -292,12 +283,12 @@ func (this *Client) SendContext(ctx context.Context, typ MessageType, msg *Messa
 
 // server side
 func (this *Client) handleHandshake(msg *Message) error {
-	key, err := this.asymmetric.Decode(msg.Body)
+	key, err := this.asymmetric.Decrypt(msg.Body)
 	if err != nil {
 		return err
 	}
 
-	encoder, err := NewAES(key)
+	encoder, err := NewAesCrypto(key)
 	if err != nil {
 		return err
 	}

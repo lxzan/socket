@@ -52,7 +52,7 @@ func Dial(ctx context.Context, addr string, opt *DialOption) (*Client, error) {
 // client side
 func sendHandshake(ctx context.Context, client *Client) error {
 	var key = []byte(Alphabet.Generate(16))
-	encryptKey, err := client.asymmetric.Encode(key)
+	encryptKey, err := client.asymmetric.Encrypt(key)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func sendHandshake(ctx context.Context, client *Client) error {
 	for {
 		select {
 		case <-client.onHandshake:
-			encoder, err := NewAES(key)
+			encoder, err := NewAesCrypto(key)
 			if err != nil {
 				return err
 			}

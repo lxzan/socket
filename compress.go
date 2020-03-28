@@ -2,7 +2,9 @@ package socket
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"errors"
 	"io/ioutil"
 )
 
@@ -12,12 +14,15 @@ type Encoder interface {
 }
 
 var (
-	GzipEncoder = new(gzipEncoder)
+	encoderMapping = map[CompressAlgo]Encoder{
+		CompressAlgo_Gzip:  new(GzipEncode),
+		CompressAlgo_Flate: new(FlateEncode),
+	}
 )
 
-type gzipEncoder struct{}
+type GzipEncode struct{}
 
-func (this *gzipEncoder) Encode(d []byte) ([]byte, error) {
+func (this *GzipEncode) Encode(d []byte) ([]byte, error) {
 	var buf = bytes.NewBufferString("")
 	gzipWriter := gzip.NewWriter(buf)
 	defer gzipWriter.Close()
@@ -32,7 +37,7 @@ func (this *gzipEncoder) Encode(d []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (this *gzipEncoder) Decode(d []byte) ([]byte, error) {
+func (this *GzipEncode) Decode(d []byte) ([]byte, error) {
 	var r = bytes.NewReader(d)
 	gzipReader, err := gzip.NewReader(r)
 	defer func() {
@@ -51,4 +56,60 @@ func (this *gzipEncoder) Decode(d []byte) ([]byte, error) {
 		return result, nil
 	}
 	return result, err
+}
+
+type FlateEncode struct{}
+
+func (this *FlateEncode) Encode(d []byte) ([]byte, error) {
+	var buf = bytes.NewBufferString("")
+	flateWriter, err := flate.NewWriter(buf, flate.DefaultCompression)
+	if err != nil {
+		return nil, err
+	}
+
+	defer flateWriter.Close()
+	if _, err := flateWriter.Write(d); err != nil {
+		return nil, err
+	}
+
+	if err := flateWriter.Flush(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (this *FlateEncode) Decode(d []byte) ([]byte, error) {
+	var r = bytes.NewReader(d)
+	flateReader := flate.NewReader(r)
+	defer flateReader.Close()
+
+	result, err := ioutil.ReadAll(flateReader)
+	if err != nil && err.Error() == "unexpected EOF" {
+		return result, nil
+	}
+	return result, err
+}
+
+func compress(algo CompressAlgo, d []byte) ([]byte, error) {
+	if algo == CompressAlgo_NoCompress {
+		return d, nil
+	}
+
+	obj, ok := encoderMapping[algo]
+	if !ok {
+		return nil, errors.New("unsupported compress algo")
+	}
+	return obj.Encode(d)
+}
+
+func uncompress(algo CompressAlgo, d []byte) ([]byte, error) {
+	if algo == CompressAlgo_NoCompress {
+		return d, nil
+	}
+
+	obj, ok := encoderMapping[algo]
+	if !ok {
+		return nil, errors.New("unsupported compress algo")
+	}
+	return obj.Decode(d)
 }

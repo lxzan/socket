@@ -11,11 +11,12 @@ import (
 	"io/ioutil"
 )
 
-type AesCrypto struct {
-	key []byte
+type Crypto interface {
+	Encrypt(plainText []byte) (cryptText []byte, err error)
+	Decrypt(cryptText []byte) (plainText []byte, err error)
 }
 
-func NewAES(key []byte) (*AesCrypto, error) {
+func NewAesCrypto(key []byte) (*AesCrypto, error) {
 	var n = len(key)
 	if n != 16 && n != 24 && n != 32 {
 		return nil, errors.New("ErrKeyLength")
@@ -23,8 +24,12 @@ func NewAES(key []byte) (*AesCrypto, error) {
 	return &AesCrypto{key: key}, nil
 }
 
+type AesCrypto struct {
+	key []byte
+}
+
 // ecb
-func (this *AesCrypto) Encode(plainText []byte) (cryptText []byte, err error) {
+func (this *AesCrypto) Encrypt(plainText []byte) (cryptText []byte, err error) {
 	block, _ := aes.NewCipher(this.key)
 	plainText = this.PKCS5Padding(plainText, block.BlockSize())
 	decrypted := make([]byte, len(plainText))
@@ -37,7 +42,7 @@ func (this *AesCrypto) Encode(plainText []byte) (cryptText []byte, err error) {
 	return decrypted, nil
 }
 
-func (this *AesCrypto) Decode(cryptText []byte) (plainText []byte, err error) {
+func (this *AesCrypto) Decrypt(cryptText []byte) (plainText []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -81,7 +86,7 @@ type RsaCrypto struct {
 }
 
 // allow empty string
-func NewRSA(pubPath string, prvPath string) (*RsaCrypto, error) {
+func NewRsaCrypto(pubPath string, prvPath string) (*RsaCrypto, error) {
 	var o = &RsaCrypto{}
 	if pubPath != "" {
 		d, err := ioutil.ReadFile(pubPath)
@@ -106,7 +111,7 @@ func NewRSA(pubPath string, prvPath string) (*RsaCrypto, error) {
 	return o, nil
 }
 
-func (this *RsaCrypto) Encode(plainText []byte) (cryptText []byte, err error) {
+func (this *RsaCrypto) Encrypt(plainText []byte) (cryptText []byte, err error) {
 	pub, err := x509.ParsePKIXPublicKey(this.pub.Bytes)
 	if err != nil {
 		return nil, err
@@ -120,7 +125,7 @@ func (this *RsaCrypto) Encode(plainText []byte) (cryptText []byte, err error) {
 	return cipherText, nil
 }
 
-func (this *RsaCrypto) Decode(cryptText []byte) (plainText []byte, err error) {
+func (this *RsaCrypto) Decrypt(cryptText []byte) (plainText []byte, err error) {
 	privateKey, err := x509.ParsePKCS1PrivateKey(this.prv.Bytes)
 	if err != nil {
 		return []byte{}, err
