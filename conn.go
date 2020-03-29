@@ -106,7 +106,13 @@ func (this *BaseClient) splitPacket(packet []byte) (msg *Message, err error) {
 // p4: Crypto Algorithm 1B
 // p5: Header Length 2B
 // p6: UserHeader and Body
-func (this *BaseClient) Send(typ MessageType, msg *Message) (n int, err error) {
+func (this *BaseClient) Send(typ MessageType, msg *Message) (err error) {
+	defer func() {
+		if err != nil {
+			this.OnError <- err
+		}
+	}()
+
 	if msg == nil {
 		msg = &Message{}
 	}
@@ -136,7 +142,7 @@ func (this *BaseClient) Send(typ MessageType, msg *Message) (n int, err error) {
 		if len(p6) >= this.Option.MinCompressSize {
 			res, err := compress(this.Option.CompressAlgo, p6)
 			if err != nil {
-				return 0, err
+				return err
 			} else {
 				p6 = res
 			}
@@ -145,10 +151,10 @@ func (this *BaseClient) Send(typ MessageType, msg *Message) (n int, err error) {
 		}
 	}
 
-	if this.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
+	if this.Option.CryptoAlgo != CryptoAlgo_NoCrypto && typ != HandshakeMessage && len(p6) > 0 {
 		res, err := this.aes.Encrypt(p6)
 		if err != nil {
-			return 0, err
+			return err
 		} else {
 			p6 = res
 		}
@@ -161,15 +167,16 @@ func (this *BaseClient) Send(typ MessageType, msg *Message) (n int, err error) {
 	buf.Write([]byte{p1, p2, p3, p4})
 	buf.Write(p5)
 	buf.Write(p6)
-	return this.conn.Write(buf.Bytes())
+	_, err = this.conn.Write(buf.Bytes())
+	return
 }
 
-func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *Message) (n int, err error) {
+func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *Message) (err error) {
 	var sig = make(chan bool)
 	defer close(sig)
 
 	go func() {
-		n, err = this.Send(typ, msg)
+		err = this.Send(typ, msg)
 		sig <- true
 	}()
 
@@ -178,7 +185,7 @@ func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *M
 		case <-sig:
 			return
 		case <-ctx.Done():
-			return 0, ERR_Timeout.Wrap("send message timeout")
+			return ERR_Timeout.Wrap("send message timeout")
 		}
 	}
 }
@@ -229,12 +236,9 @@ func (this *Conn) handleHandshake(msg *Message) error {
 	}
 	this.aes = encoder
 
-	_, err = this.Send(HandshakeMessage, nil)
-	return err
+	return this.Send(HandshakeMessage, nil)
 }
 
-func (this *Conn) Ping() {
-	if _, err := this.Send(PingMessage, nil); err != nil {
-		this.OnError <- err
-	}
+func (this *Conn) Ping() error {
+	return this.Send(PingMessage, nil)
 }

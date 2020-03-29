@@ -19,6 +19,7 @@ type Option struct {
 	MinCompressSize  int           // compress data when dataLength>=CompressMinsize
 	HeartbeatTimeout time.Duration // io timeout
 	PingInterval     time.Duration // ping interval
+	Salt             uint32        // for secure
 }
 
 func (this *Option) initialize() {
@@ -36,6 +37,9 @@ func (this *Option) initialize() {
 	}
 	if this.PingInterval == 0 {
 		this.PingInterval = 5 * time.Second
+	}
+	if this.Salt == 0 {
+		this.Salt = MacAddrNumeric()
 	}
 }
 

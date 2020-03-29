@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/lxzan/socket"
+	"time"
 )
 
 func main() {
 	println("start...")
 
-	client, err := socket.Dial(context.Background(), "127.0.0.1:9090", &socket.Option{
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	client, err := socket.Dial(ctx, "127.0.0.1:9090", &socket.Option{
 		CryptoAlgo: socket.CryptoAlgo_RsaAes,
 		PublicKey:  "example/cert/pub.pem",
 	})
@@ -22,8 +24,7 @@ func main() {
 		var str string
 		for {
 			fmt.Scanf("%s", &str)
-			if _, err = client.Send(socket.TextMessage, &socket.Message{Body: []byte(str)}); err != nil {
-				client.OnError <- err
+			if err = client.Send(socket.TextMessage, &socket.Message{Body: []byte(str)}); err != nil {
 				return
 			}
 		}

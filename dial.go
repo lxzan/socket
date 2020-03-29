@@ -43,16 +43,13 @@ func newClient(conn net.Conn, opt *Option) (*Client, error) {
 }
 
 func (this *Client) sendHandshake(ctx context.Context) error {
-	var key = []byte(Alphabet.Generate(16))
+	var key = []byte(Alphabet.Generate(16, int64(this.Option.Salt)))
 	encryptKey, err := this.asymmetric.Encrypt(key)
 	if err != nil {
 		return err
 	}
 
-	if _, err := this.Send(HandshakeMessage, &Message{Body: encryptKey}); err != nil {
-		return err
-	}
-
+	this.Send(HandshakeMessage, &Message{Body: encryptKey})
 	for {
 		select {
 		case <-this.onHandshake:
@@ -96,17 +93,17 @@ func Dial(ctx context.Context, addr string, opt *Option) (*Client, error) {
 		}
 
 		switch msg.Header.MessageType {
-		case BinaryMessage, TextMessage:
-			client.OnMessage <- msg
+		case HandshakeMessage:
+			client.onHandshake <- true
 		case PingMessage:
-			if _, err := client.Send(PongMessage, nil); err != nil {
-				client.OnError <- err
+			if err := client.Send(PongMessage, nil); err != nil {
 				return
 			}
 			if err := client.conn.SetReadDeadline(time.Now().Add(client.Option.HeartbeatTimeout)); err != nil {
-				client.OnError <- err
 				return
 			}
+		case BinaryMessage, TextMessage:
+			client.OnMessage <- msg
 		}
 	})
 
