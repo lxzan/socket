@@ -13,9 +13,11 @@ func main() {
 	s.Run(":9090", func(client *socket.Conn) {
 		for {
 			select {
+			case <-client.PingTicker.C:
+				client.Ping()
 			case msg := <-client.OnMessage:
 				println(string(msg.Body))
-				client.Send(socket.TextMessage, &socket.Message{Body: []byte("world!")})
+				client.Send(socket.TextMessage, &socket.Message{Body: []byte("rec: " + string(msg.Body))})
 			case err := <-client.OnError:
 				println(err.Error())
 				return

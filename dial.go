@@ -85,6 +85,7 @@ func Dial(ctx context.Context, addr string, opt *Option) (*Client, error) {
 	go client.read(func(msg *Message, err error) {
 		if err != nil {
 			client.OnError <- err
+			return
 		}
 
 		switch msg.Header.MessageType {
@@ -93,9 +94,11 @@ func Dial(ctx context.Context, addr string, opt *Option) (*Client, error) {
 		case PingMessage:
 			if _, err := client.Send(PongMessage, nil); err != nil {
 				client.OnError <- err
+				return
 			}
 			if err := client.conn.SetReadDeadline(time.Now().Add(client.Option.HeartbeatTimeout)); err != nil {
 				client.OnError <- err
+				return
 			}
 		}
 	})

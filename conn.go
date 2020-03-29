@@ -8,6 +8,7 @@ import (
 	"github.com/json-iterator/go"
 	"io"
 	"net"
+	"time"
 )
 
 type BaseClient struct {
@@ -180,6 +181,7 @@ func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *M
 
 type Conn struct {
 	BaseClient
+	PingTicker *time.Ticker
 }
 
 func newConn(conn net.Conn, opt *Option) (*Conn, error) {
@@ -191,6 +193,7 @@ func newConn(conn net.Conn, opt *Option) (*Conn, error) {
 			OnError:    make(chan error, 16),
 			Option:     opt,
 		},
+		PingTicker: time.NewTicker(opt.PingInterval),
 	}
 
 	if opt.CryptoAlgo != CryptoAlgo_NoCrypto {
@@ -223,4 +226,10 @@ func (this *Conn) handleHandshake(msg *Message) error {
 
 	_, err = this.Send(HandshakeMessage, nil)
 	return err
+}
+
+func (this *Conn) Ping() {
+	if _, err := this.Send(PingMessage, nil); err != nil {
+		this.OnError <- err
+	}
 }

@@ -62,7 +62,10 @@ func (this *Server) Run(addr string, onconnect func(client *Conn)) error {
 			return err
 		}
 
-		go onconnect(client)
+		go func() {
+			defer client.PingTicker.Stop()
+			onconnect(client)
+		}()
 
 		go client.read(func(msg *Message, err error) {
 			if err != nil {
@@ -80,6 +83,7 @@ func (this *Server) Run(addr string, onconnect func(client *Conn)) error {
 				client.OnMessage <- msg
 				return
 			case PongMessage:
+				println(time.Now().Unix())
 				if err := client.conn.SetReadDeadline(time.Now().Add(this.Option.HeartbeatTimeout)); err != nil {
 					client.OnError <- err
 					return
