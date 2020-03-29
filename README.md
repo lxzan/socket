@@ -9,7 +9,7 @@
     )
     
     func main() {
-    	s := socket.NewServer(&socket.DialOption{
+    	s := socket.NewServer(&socket.Option{
     		CryptoAlgo: socket.CryptoAlgo_RsaAes,
     		PrivateKey: "example/cert/prv.pem",
     	})
@@ -41,7 +41,7 @@ import (
 )
 
 func main() {
-	client, err := socket.Dial("127.0.0.1:9090", &socket.DialOption{
+	client, err := socket.Dial("127.0.0.1:9090", &socket.Option{
 		CryptoAlgo: socket.CryptoAlgo_RsaAes,
 		PublicKey:  "example/cert/pub.pem",
 	})
