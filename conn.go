@@ -186,6 +186,7 @@ func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *M
 type Conn struct {
 	BaseClient
 	PingTicker *time.Ticker
+	SerialID   uint64
 }
 
 func newConn(conn net.Conn, opt *Option) (*Conn, error) {

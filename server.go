@@ -2,11 +2,13 @@ package socket
 
 import (
 	"net"
+	"sync/atomic"
 	"time"
 )
 
 type Server struct {
 	*Option
+	NextID uint64
 }
 
 type Option struct {
@@ -62,6 +64,7 @@ func (this *Server) Run(addr string, onconnect func(client *Conn)) error {
 			return err
 		}
 
+		client.SerialID = atomic.AddUint64(&this.NextID, 1)
 		go func() {
 			defer client.PingTicker.Stop()
 			onconnect(client)

@@ -10,8 +10,8 @@ func main() {
 	println("start...")
 
 	client, err := socket.Dial(context.Background(), "127.0.0.1:9090", &socket.Option{
-		//CryptoAlgo: socket.CryptoAlgo_RsaAes,
-		//PublicKey:  "example/cert/pub.pem",
+		CryptoAlgo: socket.CryptoAlgo_RsaAes,
+		PublicKey:  "example/cert/pub.pem",
 	})
 	if err != nil {
 		println(err.Error())

@@ -6,8 +6,8 @@ import (
 
 func main() {
 	s := socket.NewServer(&socket.Option{
-		//CryptoAlgo: socket.CryptoAlgo_RsaAes,
-		//PrivateKey: "example/cert/prv.pem",
+		CryptoAlgo: socket.CryptoAlgo_RsaAes,
+		PrivateKey: "example/cert/prv.pem",
 	})
 
 	s.Run(":9090", func(client *socket.Conn) {
