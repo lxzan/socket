@@ -41,30 +41,6 @@ func newClient(conn net.Conn, opt *Option) (*Client, error) {
 	return c, nil
 }
 
-func (this *Client) handleMessage() {
-	for {
-		select {
-		default:
-			msg, err := this.read()
-			if err != nil {
-				this.OnError <- err
-			}
-
-			switch msg.Header.MessageType {
-			case BinaryMessage, TextMessage:
-				this.OnMessage <- msg
-			case PingMessage:
-				if _, err := this.Send(PongMessage, nil); err != nil {
-					this.OnError <- err
-				}
-				if err := this.conn.SetReadDeadline(time.Now().Add(this.Option.HeartbeatTimeout)); err != nil {
-					this.OnError <- err
-				}
-			}
-		}
-	}
-}
-
 func (this *Client) sendHandshake(ctx context.Context) error {
 	var key = []byte(Alphabet.Generate(16))
 	encryptKey, err := this.asymmetric.Encrypt(key)
@@ -106,7 +82,23 @@ func Dial(ctx context.Context, addr string, opt *Option) (*Client, error) {
 		return nil, err
 	}
 
-	go client.handleMessage()
+	go client.read(func(msg *Message, err error) {
+		if err != nil {
+			client.OnError <- err
+		}
+
+		switch msg.Header.MessageType {
+		case BinaryMessage, TextMessage:
+			client.OnMessage <- msg
+		case PingMessage:
+			if _, err := client.Send(PongMessage, nil); err != nil {
+				client.OnError <- err
+			}
+			if err := client.conn.SetReadDeadline(time.Now().Add(client.Option.HeartbeatTimeout)); err != nil {
+				client.OnError <- err
+			}
+		}
+	})
 
 	if client.Option.CryptoAlgo != CryptoAlgo_NoCrypto {
 		if err := client.sendHandshake(ctx); err != nil {

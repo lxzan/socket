@@ -8,7 +8,6 @@ import (
 	"github.com/json-iterator/go"
 	"io"
 	"net"
-	"time"
 )
 
 type BaseClient struct {
@@ -21,23 +20,26 @@ type BaseClient struct {
 	OnError    chan error
 }
 
-func (this *BaseClient) read() (msg *Message, err error) {
+func (this *BaseClient) read(callback func(msg *Message, err error)) {
 	var rl uint32 = 4
 	var rlb = true
 
 	for {
 		n, err := io.CopyN(this.readBuffer, this.conn, int64(rl))
 		if err != nil {
-			return nil, ERR_ReadMessage.Wrap(err.Error())
+			callback(nil, ERR_ReadMessage.Wrap(err.Error()))
+			return
 		}
 		if n != int64(rl) {
-			return nil, ERR_ReadMessage.Wrap("network error")
+			callback(nil, ERR_ReadMessage.Wrap("network error"))
+			return
 		}
 
 		packet := make([]byte, rl)
 		_, err = this.readBuffer.Read(packet)
 		if err != nil {
-			return nil, ERR_ReadMessage.Wrap(err.Error())
+			callback(nil, ERR_ReadMessage.Wrap(err.Error()))
+			return
 		}
 
 		if rlb {
@@ -48,9 +50,10 @@ func (this *BaseClient) read() (msg *Message, err error) {
 			rlb = true
 			msg, err := this.splitPacket(packet)
 			if err != nil {
-				return nil, ERR_DecodeMessage.Wrap(err.Error())
+				callback(nil, ERR_DecodeMessage.Wrap(err.Error()))
+				return
 			}
-			return msg, nil
+			callback(msg, nil)
 		}
 	}
 }
@@ -204,42 +207,6 @@ func newConn(conn net.Conn, opt *Option) (*Conn, error) {
 		}
 	}
 	return c, nil
-}
-
-func (this *Conn) handleMessage() {
-	var ticker = time.NewTicker(this.Option.PingInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if _, err := this.Send(PingMessage, nil); err != nil {
-				this.OnError <- err
-				return
-			}
-		default:
-			msg, err := this.read()
-			if err != nil {
-				this.OnError <- err
-				return
-			}
-
-			switch msg.Header.MessageType {
-			case HandshakeMessage:
-				if err := this.handleHandshake(msg); err != nil {
-					this.OnError <- err
-					return
-				}
-			case BinaryMessage, TextMessage:
-				this.OnMessage <- msg
-				return
-			case PongMessage:
-				if err := this.conn.SetReadDeadline(time.Now().Add(this.Option.HeartbeatTimeout)); err != nil {
-					this.OnError <- err
-					return
-				}
-			}
-		}
-	}
 }
 
 func (this *Conn) handleHandshake(msg *Message) error {

@@ -64,6 +64,27 @@ func (this *Server) Run(addr string, onconnect func(client *Conn)) error {
 
 		go onconnect(client)
 
-		go client.handleMessage()
+		go client.read(func(msg *Message, err error) {
+			if err != nil {
+				client.OnError <- err
+				return
+			}
+
+			switch msg.Header.MessageType {
+			case HandshakeMessage:
+				if err := client.handleHandshake(msg); err != nil {
+					client.OnError <- err
+					return
+				}
+			case BinaryMessage, TextMessage:
+				client.OnMessage <- msg
+				return
+			case PongMessage:
+				if err := client.conn.SetReadDeadline(time.Now().Add(this.Option.HeartbeatTimeout)); err != nil {
+					client.OnError <- err
+					return
+				}
+			}
+		})
 	}
 }
