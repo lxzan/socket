@@ -30,7 +30,7 @@ func (this *Option) initialize() {
 		this.MinCompressSize = 4 * 1024
 	}
 	if this.HeartbeatTimeout == 0 {
-		this.HeartbeatTimeout = time.Minute
+		this.HeartbeatTimeout = 30 * time.Second
 	}
 	if this.PingInterval == 0 {
 		this.PingInterval = 5 * time.Second

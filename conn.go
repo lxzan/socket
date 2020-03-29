@@ -63,13 +63,17 @@ func (this *BaseClient) splitPacket(packet []byte) (msg *Message, err error) {
 	msg = &Message{Header: &Header{}}
 	var totalLength = len(packet)
 	if totalLength < 6 {
-		return nil, errors.New("received invalid data")
+		return nil, errors.New("illegal data")
 	}
 	if err := msg.Header.decodeProtocolHeader(packet); err != nil {
 		return nil, err
 	}
 
 	msg.Body = packet[6:]
+	if int(msg.Header.HeaderLength) > len(msg.Body) {
+		return nil, errors.New("illegal data")
+	}
+
 	if msg.Header.CryptoAlgorithm != CryptoAlgo_NoCrypto {
 		body, err := this.aes.Decrypt(msg.Body)
 		if err != nil {
@@ -174,7 +178,7 @@ func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *M
 		case <-sig:
 			return
 		case <-ctx.Done():
-			return 0, errors.New("write message timeout")
+			return 0, ERR_Timeout.Wrap("send message timeout")
 		}
 	}
 }

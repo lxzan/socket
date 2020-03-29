@@ -10,6 +10,7 @@ import (
 
 type Client struct {
 	BaseClient
+	Addr        string
 	onHandshake chan bool
 }
 
@@ -62,9 +63,14 @@ func (this *Client) sendHandshake(ctx context.Context) error {
 			this.aes = encoder
 			return nil
 		case <-ctx.Done():
-			return errors.New("handshake timeout")
+			return ERR_Timeout.Wrap("handshake timeout")
 		}
 	}
+}
+
+func (this *Client) Reconnect() (*Client, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	return Dial(ctx, this.Addr, this.Option)
 }
 
 func Dial(ctx context.Context, addr string, opt *Option) (*Client, error) {
@@ -82,6 +88,7 @@ func Dial(ctx context.Context, addr string, opt *Option) (*Client, error) {
 		return nil, err
 	}
 
+	client.Addr = addr
 	go client.read(func(msg *Message, err error) {
 		if err != nil {
 			client.OnError <- err
