@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
-	"github.com/json-iterator/go"
 	"io"
 	"net"
 	"time"
@@ -90,7 +90,7 @@ func (this *BaseClient) splitPacket(packet []byte) (msg *Message, err error) {
 	}
 
 	if msg.Header.HeaderLength > 0 {
-		if err := jsoniter.Unmarshal(msg.Body[:msg.Header.HeaderLength], &msg.Header.Form); err != nil {
+		if err := json.Unmarshal(msg.Body[:msg.Header.HeaderLength], &msg.Header.Form); err != nil {
 			return nil, err
 		}
 	}
@@ -122,7 +122,7 @@ func (this *BaseClient) Send(typ MessageType, msg *Message) (n int, err error) {
 	var p5 = make([]byte, 2)
 	var p6 []byte
 	if len(msg.Header.Form) > 0 {
-		p6, _ = jsoniter.Marshal(msg.Header.Form)
+		p6, _ = json.Marshal(msg.Header.Form)
 	}
 
 	var headerLength = len(p6)

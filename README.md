@@ -18,7 +18,7 @@
     		for {
     			select {
                 case <-client.PingTicker.C:
-				    client.Ping()
+		            client.Ping()
     			case msg:=<-client.OnMessage:
     			    println(&msg.Body)
     			case err := <-client.OnError:
