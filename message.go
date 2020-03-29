@@ -13,7 +13,6 @@ const (
 	PingMessage
 	PongMessage
 	HandshakeMessage
-	CloseMessage
 )
 
 type CryptoAlgo uint8
@@ -55,9 +54,8 @@ type Header struct {
 	Form              Form
 }
 
-func (this *Header) Get(k string) (string, bool) {
-	v, ok := this.Form[k]
-	return v, ok
+func (this *Header) Get(k string) string {
+	return this.Form[k]
 }
 
 func (this *Header) decodeProtocolHeader(d []byte) error {

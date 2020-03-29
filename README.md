@@ -1,4 +1,4 @@
-### Universal Socket Communication Protocol
+### Universal Socket Protocol
 
 - Server
 ```go
