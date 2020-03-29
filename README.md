@@ -17,6 +17,8 @@
     	s.Run(":9090", func(client *socket.Client) {
     		for {
     			select {
+                case <-client.PingTicker.C:
+				    client.Ping()
     			case msg:=<-client.OnMessage:
     			    println(&msg.Body)
     			case err := <-client.OnError:
