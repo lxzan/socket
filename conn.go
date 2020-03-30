@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type BaseClient struct {
+type baseClient struct {
 	conn       net.Conn
 	asymmetric Crypto
 	aes        Crypto
@@ -21,7 +21,7 @@ type BaseClient struct {
 	OnError    chan error
 }
 
-func (this *BaseClient) read(callback func(msg *Message, err error)) {
+func (this *baseClient) read(callback func(msg *Message, err error)) {
 	var rl uint32 = 4
 	var rlb = true
 
@@ -33,6 +33,10 @@ func (this *BaseClient) read(callback func(msg *Message, err error)) {
 		}
 		if n != int64(rl) {
 			callback(nil, ERR_ReadMessage.Wrap("network error"))
+			return
+		}
+		if n > this.Option.MaxMessageSize {
+			callback(nil, ERR_MessageSizeExceed)
 			return
 		}
 
@@ -59,7 +63,7 @@ func (this *BaseClient) read(callback func(msg *Message, err error)) {
 	}
 }
 
-func (this *BaseClient) splitPacket(packet []byte) (msg *Message, err error) {
+func (this *baseClient) splitPacket(packet []byte) (msg *Message, err error) {
 	msg = &Message{Header: &Header{}}
 	var totalLength = len(packet)
 	if totalLength < 6 {
@@ -106,13 +110,7 @@ func (this *BaseClient) splitPacket(packet []byte) (msg *Message, err error) {
 // p4: Crypto Algorithm 1B
 // p5: Header Length 2B
 // p6: UserHeader and Body
-func (this *BaseClient) Send(typ MessageType, msg *Message) (err error) {
-	defer func() {
-		if err != nil {
-			this.OnError <- err
-		}
-	}()
-
+func (this *baseClient) Send(typ MessageType, msg *Message) (err error) {
 	if msg == nil {
 		msg = &Message{}
 	}
@@ -171,7 +169,7 @@ func (this *BaseClient) Send(typ MessageType, msg *Message) (err error) {
 	return
 }
 
-func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *Message) (err error) {
+func (this *baseClient) SendContext(ctx context.Context, typ MessageType, msg *Message) (err error) {
 	var sig = make(chan bool)
 	defer close(sig)
 
@@ -191,14 +189,14 @@ func (this *BaseClient) SendContext(ctx context.Context, typ MessageType, msg *M
 }
 
 type Conn struct {
-	BaseClient
+	baseClient
 	PingTicker *time.Ticker
 	SerialID   uint64
 }
 
 func newConn(conn net.Conn, opt *Option) (*Conn, error) {
 	var c = &Conn{
-		BaseClient: BaseClient{
+		baseClient: baseClient{
 			conn:       conn,
 			readBuffer: bytes.NewBufferString(""),
 			OnMessage:  make(chan *Message, 16),

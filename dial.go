@@ -9,14 +9,14 @@ import (
 )
 
 type Client struct {
-	BaseClient
+	baseClient
 	Addr        string
 	onHandshake chan bool
 }
 
 func newClient(conn net.Conn, opt *Option) (*Client, error) {
 	var c = &Client{
-		BaseClient: BaseClient{
+		baseClient: baseClient{
 			conn:       conn,
 			readBuffer: bytes.NewBufferString(""),
 			OnMessage:  make(chan *Message, 16),

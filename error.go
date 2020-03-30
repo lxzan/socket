@@ -24,7 +24,8 @@ func NewError(code int64, msg string) *Error {
 }
 
 var (
-	ERR_ReadMessage   = NewError(0, "read message error")
-	ERR_DecodeMessage = NewError(1, "decode message error")
-	ERR_Timeout       = NewError(2, "")
+	ERR_ReadMessage       = NewError(0, "read message error")
+	ERR_DecodeMessage     = NewError(1, "decode message error")
+	ERR_Timeout           = NewError(2, "")
+	ERR_MessageSizeExceed = NewError(3, "message size exceed")
 )

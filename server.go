@@ -16,10 +16,11 @@ type Option struct {
 	CryptoAlgo                     // default RSA-AES
 	PublicKey        string        // pem file path
 	PrivateKey       string        // pem file path
-	MinCompressSize  int           // compress data when dataLength>=CompressMinsize
 	HeartbeatTimeout time.Duration // io timeout
 	PingInterval     time.Duration // ping interval
 	Salt             uint32        // for secure
+	MaxMessageSize   int64         // Max Message Size
+	MinCompressSize  int           // compress data when dataLength>=CompressMinsize
 }
 
 func (this *Option) initialize() {
@@ -40,6 +41,9 @@ func (this *Option) initialize() {
 	}
 	if this.Salt == 0 {
 		this.Salt = MacAddrNumeric()
+	}
+	if this.MaxMessageSize == 0 {
+		this.MaxMessageSize = 1024 * 1024 * 1024
 	}
 }
 
